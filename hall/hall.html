@@ -1,294 +1,135 @@
 <!DOCTYPE html>
 <html lang="uk">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>Схема залу (каса)</title>
 
   <link rel="stylesheet" href="../styles.css" />
 
   <style>
-    body{background:#f3f4f6}
-    h1{margin-bottom:12px}
-
-    .layout{display:flex;gap:24px;align-items:flex-start}
-    .hall{
-      background:#e5e7eb;
-      padding:16px;
-      border-radius:16px;
-      flex:1;
-      overflow-x:auto;
-    }
-    .sidebar{
-      width:300px;
-      background:#fff;
-      border-radius:16px;
-      padding:16px;
-    }
-
-    .section{margin-bottom:24px}
-    .section-title{
-      text-align:center;
-      font-weight:800;
-      margin-bottom:8px;
-      color:#374151;
-    }
-
-    .row{
-      display:flex;
-      align-items:center;
-      gap:8px;
-      margin-bottom:6px;
-    }
-    .row-label{
-      width:24px;
-      text-align:right;
-      font-size:12px;
-      color:#6b7280;
-    }
-    .seats{display:flex;gap:4px}
-
-    .seat{
-      width:26px;
-      height:26px;
-      border-radius:6px;
-      border:1px solid #d1d5db;
-      background:#fff;
-      font-size:11px;
-      cursor:pointer;
-    }
-    .seat.selected{
-      background:#2563eb;
-      color:#fff;
-      border-color:#2563eb;
-    }
-
-    .seat.parter{background:#fef9c3}
-    .seat.amphi{background:#e0f2fe}
-    .seat.balcony{background:#f3e8ff}
-    .seat.lodge{background:#fee2e2}
-
-    button.primary{
-      width:100%;
-      margin-top:12px;
-      padding:12px;
-      border-radius:999px;
-      border:none;
-      background:#2563eb;
-      color:#fff;
-      font-weight:800;
-      cursor:pointer;
-    }
-    button.primary:disabled{
-      opacity:.4;
-      cursor:not-allowed;
-    }
+    .hall-layout{display:flex;gap:24px;align-items:flex-start;}
+    .hall-left{flex:1 1 auto;min-width:0;}
+    .hall-sidebar{width:300px;flex:0 0 300px;}
+    .hall-scroll{background:#e5e7eb;border-radius:16px;padding:12px;overflow-x:auto;}
+    .hall-inner{width:max(980px,100%);}
+    .hall-section{margin-bottom:18px;}
+    .hall-section-title{text-align:center;font-size:14px;text-transform:uppercase;color:#6b7280;}
+    .row-line{display:flex;align-items:center;gap:8px;margin-bottom:4px;}
+    .row-label{width:22px;text-align:right;font-size:11px;color:#6b7280;}
+    .seats-row{display:flex;gap:4px;}
+    .seat{width:24px;height:24px;border-radius:6px;border:1px solid #d1d5db;
+      background:#fff;font-size:11px;cursor:pointer;}
+    .seat--selected{background:#2563eb;color:#fff;border-color:#2563eb;}
+    .seat--gap-right{margin-right:16px;}
+    .amphi-gap{width:24px;}
+    .seat--parter-front{background:#fef9c3;}
+    .seat--parter-mid{background:#dbeafe;}
+    .seat--parter-back{background:#e5e7eb;}
+    .seat--amphi{background:#e0f2fe;}
+    .seat--balcony{background:#f3e8ff;}
+    .seat--lodge{background:#fee2e2;}
   </style>
 </head>
-<body>
 
+<body>
 <main class="main">
   <div class="container">
     <h1>Схема залу (каса)</h1>
 
-    <div class="layout">
-      <div class="hall" id="hall"></div>
+    <div class="hall-layout">
+      <div class="hall-left">
+        <div class="hall-scroll">
+          <div class="hall-inner">
 
-      <aside class="sidebar">
-        <h2>Обрані місця</h2>
-        <div id="chosen">—</div>
-        <div style="margin-top:8px;font-weight:700">
-          Сума: <span id="total">0</span> грн
+            <section class="hall-section">
+              <div class="hall-section-title">Партер</div>
+              <div id="parter-block"></div>
+            </section>
+
+            <section class="hall-section">
+              <div class="hall-section-title">Амфітеатр</div>
+              <div id="amphi-block"></div>
+            </section>
+
+            <section class="hall-section">
+              <div class="hall-section-title">Балкон</div>
+              <div id="balcony-block"></div>
+            </section>
+
+          </div>
         </div>
-        <button id="goSale" class="primary" disabled>
-          Перейти до продажу
-        </button>
+      </div>
+
+      <aside class="hall-sidebar">
+        <div class="card">
+          <h2>Обрані місця</h2>
+          <p id="summary-places">—</p>
+          <p id="summary-amount">Сума: 0 грн</p>
+          <button id="go-sale" class="button-primary" disabled>
+            Перейти до продажу
+          </button>
+        </div>
       </aside>
     </div>
   </div>
 </main>
 
 <script>
-/* ============================
-   НАСТРОЙКИ
-============================ */
-const HALL_JSON = "../data/halls/shevchenko-big.json";
+  const selected = new Map();
 
-/* ============================
-   СОСТОЯНИЕ
-============================ */
-const selected = new Map();
+  const parterRows = Array.from({length:18}, (_,i)=>({
+    row:i+1,seats:20,
+    price:i<6?200:i<12?160:140,
+    cls:i<6?"seat--parter-front":i<12?"seat--parter-mid":"seat--parter-back"
+  }));
 
-/* ============================
-   ЗАГРУЗКА СХЕМЫ
-============================ */
-async function loadHall(){
-  const res = await fetch(HALL_JSON, {cache:"no-store"});
-  if(!res.ok) throw new Error("hall json error");
-  return await res.json();
-}
+  function seatKey(r,s){ return `P${r}-M${s}` }
 
-/* ============================
-   РЕНДЕР
-============================ */
-function renderSection(title, rows, zone, price, css){
-  const wrap = document.createElement("div");
-  wrap.className = "section";
-
-  const h = document.createElement("div");
-  h.className = "section-title";
-  h.textContent = title;
-  wrap.appendChild(h);
-
-  rows.forEach(r=>{
-    const row = document.createElement("div");
-    row.className = "row";
-
-    const label = document.createElement("div");
-    label.className = "row-label";
-    label.textContent = r.row ?? "";
-    row.appendChild(label);
-
-    const seats = document.createElement("div");
-    seats.className = "seats";
-
-    for(let i=1;i<=r.seats;i++){
-      const b = document.createElement("button");
-      b.className = `seat ${css}`;
-      b.textContent = i;
-
-      const key = `${zone}-${r.row}-${i}`;
-
-      b.onclick = ()=>{
-        if(selected.has(key)){
-          selected.delete(key);
-          b.classList.remove("selected");
-        }else{
-          selected.set(key,{
-            zone, row:r.row, seat:i, price
-          });
-          b.classList.add("selected");
-        }
-        updateSummary();
-      };
-
-      seats.appendChild(b);
-    }
-
-    row.appendChild(seats);
-    wrap.appendChild(row);
-  });
-
-  return wrap;
-}
-
-/* ============================
-   СУММАРИЙ
-============================ */
-function updateSummary(){
-  const list = document.getElementById("chosen");
-  const total = document.getElementById("total");
-  const btn = document.getElementById("goSale");
-
-  if(selected.size===0){
-    list.textContent="—";
-    total.textContent="0";
-    btn.disabled=true;
-    return;
+  function renderParter(){
+    const b=document.getElementById("parter-block");
+    parterRows.forEach(r=>{
+      const line=document.createElement("div"); line.className="row-line";
+      const lab=document.createElement("div"); lab.className="row-label"; lab.textContent=r.row;
+      const row=document.createElement("div"); row.className="seats-row";
+      for(let s=1;s<=r.seats;s++){
+        const btn=document.createElement("button");
+        btn.className=`seat ${r.cls}`+(s===10?" seat--gap-right":"");
+        btn.textContent=s;
+        btn.onclick=()=>toggle(btn,seatKey(r.row,s),r.price);
+        row.appendChild(btn);
+      }
+      line.append(lab,row); b.appendChild(line);
+    });
   }
 
-  const items = [];
-  let sum = 0;
-
-  selected.forEach(v=>{
-    items.push(`Ряд ${v.row}, місце ${v.seat} (${v.zone})`);
-    sum += v.price;
-  });
-
-  list.textContent = items.join("; ");
-  total.textContent = sum;
-  btn.disabled=false;
-}
-
-/* ============================
-   СТАРТ
-============================ */
-(async ()=>{
-  try{
-    const hall = await loadHall();
-    const root = document.getElementById("hall");
-
-    root.appendChild(
-      renderSection(
-        "Партер",
-        hall.parter.rows,
-        "Партер",
-        200,
-        "parter"
-      )
-    );
-
-    if(hall.amphi){
-      root.appendChild(
-        renderSection(
-          "Амфітеатр",
-          hall.amphi.rows,
-          "Амфітеатр",
-          120,
-          "amphi"
-        )
-      );
+  function toggle(btn,key,price){
+    if(selected.has(key)){
+      selected.delete(key); btn.classList.remove("seat--selected");
+    }else{
+      selected.set(key,price); btn.classList.add("seat--selected");
     }
-
-    if(hall.balcony){
-      root.appendChild(
-        renderSection(
-          "Балкон",
-          hall.balcony.rows,
-          "Балкон",
-          100,
-          "balcony"
-        )
-      );
-    }
-
-    if(hall.lodges){
-      root.appendChild(
-        renderSection(
-          "Ложі",
-          hall.lodges.rows,
-          "Ложа",
-          10,
-          "lodge"
-        )
-      );
-    }
-
-  }catch(e){
-    document.getElementById("hall").innerHTML =
-      "❌ Не вдалося завантажити схему залу";
-    console.error(e);
+    update();
   }
-})();
 
-/* ============================
-   ПЕРЕХОД К ПРОДАЖЕ
-============================ */
-document.getElementById("goSale").onclick = ()=>{
-  const seats = [];
-  let sum = 0;
+  function update(){
+    const places=[...selected.keys()];
+    document.getElementById("summary-places").textContent=
+      places.length?places.join(", "):"—";
+    const sum=[...selected.values()].reduce((a,b)=>a+b,0);
+    document.getElementById("summary-amount").textContent="Сума: "+sum+" грн";
+    document.getElementById("go-sale").disabled=!places.length;
+  }
 
-  selected.forEach(v=>{
-    seats.push(`${v.zone} ${v.row}-${v.seat}`);
-    sum+=v.price;
-  });
+  document.getElementById("go-sale").onclick=()=>{
+    sessionStorage.setItem("CASH_SALE",JSON.stringify({
+      seats:[...selected.keys()],
+      amount:[...selected.values()].reduce((a,b)=>a+b,0)
+    }));
+    location.href="../cashier/sale.html";
+  };
 
-  const url = new URL("../cashier/sale.html", location.href);
-  url.searchParams.set("seats", seats.join(", "));
-  url.searchParams.set("amount", sum);
-
-  location.href = url.toString();
-};
+  renderParter();
 </script>
 </body>
 </html>

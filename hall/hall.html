@@ -1,17 +1,17 @@
 <!DOCTYPE html>
 <html lang="uk">
 <head>
-<meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1" />
+<meta charset="UTF-8">
 <title>Схема залу (каса)</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
 
 <style>
-body{font-family:system-ui;margin:0;background:#f3f4f6}
+body{margin:0;font-family:system-ui;background:#f3f4f6}
 h1{margin:16px}
 .wrap{display:flex;gap:24px;padding:16px}
 .hall{flex:1;background:#e5e7eb;border-radius:16px;padding:12px;overflow:auto}
-.sidebar{width:280px;background:#fff;border-radius:16px;padding:16px}
-.section-title{text-align:center;color:#6b7280;margin:10px 0;font-size:13px}
+.side{width:280px;background:#fff;border-radius:16px;padding:16px}
+.section{text-align:center;color:#6b7280;margin:12px 0;font-size:13px}
 .row{display:flex;align-items:center;margin-bottom:4px}
 .row-label{width:22px;text-align:right;font-size:11px;color:#6b7280;margin-right:6px}
 .seats{display:flex;gap:4px}
@@ -26,15 +26,15 @@ h1{margin:16px}
 .amphi{background:#e0f2fe}
 .balcony{background:#f3e8ff}
 .lodge{background:#fee2e2}
-.selected{background:#2563eb!important;color:#fff}
+.sel{background:#2563eb!important;color:#fff}
+.taken{background:#9ca3af!important;color:#fff;cursor:not-allowed}
 .gap{margin-right:16px}
 .lodges{display:flex;flex-direction:column;gap:4px}
-button{cursor:pointer}
-button.primary{
+button.main{
   width:100%;padding:10px;border-radius:10px;
   border:0;background:#2563eb;color:#fff;font-size:14px
 }
-button.primary:disabled{opacity:.4}
+button.main:disabled{opacity:.4}
 </style>
 </head>
 
@@ -44,91 +44,119 @@ button.primary:disabled{opacity:.4}
 <div class="wrap">
   <div class="hall" id="hall"></div>
 
-  <div class="sidebar">
+  <div class="side">
     <h3>Обрані місця</h3>
     <div id="list">—</div>
     <div id="sum">Сума: 0 грн</div><br>
-    <button id="sell" class="primary" disabled>Перейти до продажу</button>
+    <button id="sell" class="main" disabled>Перейти до продажу</button>
   </div>
 </div>
 
-<script type="module">
-import { createSale, getTakenSeats } from "../cashier/cashier.db.js";
+<script>
+/* ===== IndexedDB ===== */
+const DB="cashbox",V=1;
+let db;
+function openDB(){
+  if(db) return Promise.resolve(db);
+  return new Promise(res=>{
+    const r=indexedDB.open(DB,V);
+    r.onupgradeneeded=e=>{
+      const d=e.target.result;
+      d.createObjectStore("taken",{keyPath:"key"});
+    };
+    r.onsuccess=()=>res(db=r.result);
+  });
+}
+async function getTaken(show){
+  const d=await openDB();
+  return new Promise(res=>{
+    const r=d.transaction("taken").objectStore("taken").getAll();
+    r.onsuccess=()=>res(r.result.filter(x=>x.show===show).map(x=>x.seat));
+  });
+}
+async function saveTaken(show,seat){
+  const d=await openDB();
+  d.transaction("taken","readwrite")
+   .objectStore("taken")
+   .put({key:show+"|"+seat,show,seat});
+}
 
-const qs = new URLSearchParams(location.search);
-const show = qs.get("show");
+/* ===== Logic ===== */
+const qs=new URLSearchParams(location.search);
+const show=qs.get("show")||"test";
+const hall=document.getElementById("hall");
+const selected=new Map();
+let taken=new Set();
 
-const prices = r => r<=6?200:r<=12?160:140;
-const selected = new Map();
-const taken = new Set(await getTakenSeats(show));
+function price(r){
+  return r<=6?200:r<=12?160:140;
+}
 
-const hall = document.getElementById("hall");
+function update(){
+  const arr=[...selected.keys()];
+  document.getElementById("list").textContent=arr.length?arr.join(", "):"—";
+  const sum=[...selected.values()].reduce((a,b)=>a+b,0);
+  document.getElementById("sum").textContent="Сума: "+sum+" грн";
+  document.getElementById("sell").disabled=!arr.length;
+}
 
-function seat(key, price, cls){
+function seat(label,p,cls){
   const b=document.createElement("button");
   b.className="seat "+cls;
-  b.textContent=key.split("-")[1];
-  if(taken.has(key)) b.disabled=true;
+  b.textContent=label.split("-")[1];
+  if(taken.has(label)){b.classList.add("taken");b.disabled=true;}
   b.onclick=()=>{
-    if(b.classList.toggle("selected")){
-      selected.set(key,price);
-    }else selected.delete(key);
+    if(b.classList.toggle("sel")) selected.set(label,p);
+    else selected.delete(label);
     update();
   };
   return b;
 }
 
-function update(){
-  const keys=[...selected.keys()];
-  document.getElementById("list").textContent=
-    keys.length?keys.join(", "):"—";
-  const sum=[...selected.values()].reduce((a,b)=>a+b,0);
-  document.getElementById("sum").textContent="Сума: "+sum+" грн";
-  document.getElementById("sell").disabled=!keys.length;
-}
-
+/* ===== Render ===== */
 function parter(){
-  hall.innerHTML+=`<div class="section-title">ПАРТЕР</div>`;
+  hall.innerHTML+=`<div class="section">ПАРТЕР</div>`;
   for(let r=1;r<=18;r++){
     const row=document.createElement("div");row.className="row";
     row.innerHTML=`<div class="row-label">${r}</div>`;
     const s=document.createElement("div");s.className="seats";
     for(let m=1;m<=20;m++){
       const cls=(r<=6?"front":r<=12?"mid":"back")+(m===10?" gap":"");
-      s.append(seat(`P${r}-M${m}`,prices(r),cls));
+      s.append(seat(`P${r}-M${m}`,price(r),cls));
     }
     row.append(s);hall.append(row);
   }
 }
 
 function lodges(){
-  const l=document.createElement("div");
-  l.className="row";l.style.justifyContent="space-between";
+  const wrap=document.createElement("div");
+  wrap.style.display="flex";
+  wrap.style.justifyContent="space-between";
   const A=document.createElement("div");A.className="lodges";
   const B=document.createElement("div");B.className="lodges";
   for(let i=1;i<=18;i++){
     A.append(seat(`A0-M${i}`,10,"lodge"));
     B.append(seat(`B0-M${i}`,10,"lodge"));
   }
-  l.append(A,B);hall.append(l);
+  wrap.append(A,B);hall.append(wrap);
 }
 
 function amphi(){
-  hall.innerHTML+=`<div class="section-title">АМФІТЕАТР</div>`;
+  hall.innerHTML+=`<div class="section">АМФІТЕАТР</div>`;
   for(let r=19;r<=23;r++){
     const row=document.createElement("div");row.className="row";
     row.innerHTML=`<div class="row-label">${r}</div>`;
     const s=document.createElement("div");s.className="seats";
     for(let m=1;m<=22;m++){
-      if(m===12)s.append(document.createElement("div")).style.width="24px";
-      else s.append(seat(`A${r}-M${m}`,120,"amphi"));
+      if(m===12){s.append(document.createElement("div")).style.width="24px";continue;}
+      s.append(seat(`A${r}-M${m}`,120,"amphi"));
     }
     row.append(s);hall.append(row);
   }
 }
 
 function balcony(){
-  hall.innerHTML+=`<div class="section-title">БАЛКОН</div>`;
+  hall.innerHTML+=`<div class="section">БАЛКОН</div>`;
   for(let r=1;r<=6;r++){
     const row=document.createElement("div");row.className="row";
     row.innerHTML=`<div class="row-label">${r}</div>`;
@@ -142,12 +170,14 @@ function balcony(){
   }
 }
 
-parter();lodges();amphi();balcony();
+/* ===== Init ===== */
+(async()=>{
+  taken=new Set(await getTaken(show));
+  parter();lodges();amphi();balcony();
+})();
 
 document.getElementById("sell").onclick=async()=>{
-  for(const [seat,price] of selected){
-    await createSale({show_id:show,seat_label:seat,price});
-  }
+  for(const k of selected.keys()) await saveTaken(show,k);
   alert("Продаж зафіксовано локально");
   location.reload();
 };

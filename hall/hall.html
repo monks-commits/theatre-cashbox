@@ -1,76 +1,86 @@
 <!DOCTYPE html>
 <html lang="uk">
 <head>
-  <meta charset="utf-8"/>
-  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Схема залу (каса)</title>
 
-  <link rel="stylesheet" href="../styles.css"/>
+  <link rel="stylesheet" href="../styles.css" />
 
   <style>
     body{background:#f3f4f6}
     h1{margin-bottom:12px}
 
     .layout{display:flex;gap:24px;align-items:flex-start}
-    .hall{flex:1;background:#e5e7eb;border-radius:16px;padding:16px}
-    .side{width:320px;background:#fff;border-radius:16px;padding:16px}
-
-    .section{margin-bottom:18px}
-    .section h3{
-      text-align:center;
-      font-size:14px;
-      text-transform:uppercase;
-      letter-spacing:.08em;
-      color:#6b7280;
-      margin:6px 0;
+    .hall{
+      background:#e5e7eb;
+      padding:16px;
+      border-radius:16px;
+      flex:1;
+      overflow-x:auto;
+    }
+    .sidebar{
+      width:300px;
+      background:#fff;
+      border-radius:16px;
+      padding:16px;
     }
 
-    .row{display:flex;align-items:center;gap:8px;margin-bottom:6px}
-    .row-label{width:26px;text-align:right;font-size:12px;color:#6b7280}
+    .section{margin-bottom:24px}
+    .section-title{
+      text-align:center;
+      font-weight:800;
+      margin-bottom:8px;
+      color:#374151;
+    }
 
-    .seats{display:flex;gap:4px;flex-wrap:nowrap}
+    .row{
+      display:flex;
+      align-items:center;
+      gap:8px;
+      margin-bottom:6px;
+    }
+    .row-label{
+      width:24px;
+      text-align:right;
+      font-size:12px;
+      color:#6b7280;
+    }
+    .seats{display:flex;gap:4px}
 
     .seat{
-      width:26px;height:26px;
+      width:26px;
+      height:26px;
       border-radius:6px;
       border:1px solid #d1d5db;
       background:#fff;
       font-size:11px;
       cursor:pointer;
-      display:flex;
-      align-items:center;
-      justify-content:center;
     }
-
     .seat.selected{
       background:#2563eb;
       color:#fff;
       border-color:#2563eb;
     }
 
-    .seat.taken{
-      background:#9ca3af;
-      color:#fff;
-      cursor:not-allowed;
-    }
-
-    .gap{margin-right:16px}
-
-    .price{font-weight:700}
+    .seat.parter{background:#fef9c3}
+    .seat.amphi{background:#e0f2fe}
+    .seat.balcony{background:#f3e8ff}
+    .seat.lodge{background:#fee2e2}
 
     button.primary{
       width:100%;
+      margin-top:12px;
       padding:12px;
       border-radius:999px;
-      border:0;
+      border:none;
       background:#2563eb;
       color:#fff;
-      font-weight:700;
+      font-weight:800;
       cursor:pointer;
     }
-
     button.primary:disabled{
-      background:#93c5fd;
+      opacity:.4;
       cursor:not-allowed;
     }
   </style>
@@ -84,16 +94,13 @@
     <div class="layout">
       <div class="hall" id="hall"></div>
 
-      <aside class="side">
-        <h3>Обрані місця</h3>
-        <div id="selected">—</div>
-        <div style="margin-top:8px">
-          Сума: <span class="price" id="total">0</span> грн
+      <aside class="sidebar">
+        <h2>Обрані місця</h2>
+        <div id="chosen">—</div>
+        <div style="margin-top:8px;font-weight:700">
+          Сума: <span id="total">0</span> грн
         </div>
-
-        <div style="height:16px"></div>
-
-        <button class="primary" id="goSale" disabled>
+        <button id="goSale" class="primary" disabled>
           Перейти до продажу
         </button>
       </aside>
@@ -102,180 +109,186 @@
 </main>
 
 <script>
-/* ===============================
-   ПАРАМЕТРИ
-================================ */
-const params = new URLSearchParams(location.search);
-const show = params.get("show") || "";
-const role = params.get("role") || "cashier";
+/* ============================
+   НАСТРОЙКИ
+============================ */
+const HALL_JSON = "../data/halls/shevchenko-big.json";
 
-/* ===============================
-   СТАН
-================================ */
+/* ============================
+   СОСТОЯНИЕ
+============================ */
 const selected = new Map();
 
-/* ===============================
-   ЗАВАНТАЖЕННЯ СХЕМИ
-================================ */
-fetch("../data/halls/shevchenko-big.json")
-  .then(r => r.json())
-  .then(renderHall)
-  .catch(() => {
-    document.getElementById("hall").innerHTML =
-      "<b>❌ Не вдалося завантажити схему залу</b>";
-  });
+/* ============================
+   ЗАГРУЗКА СХЕМЫ
+============================ */
+async function loadHall(){
+  const res = await fetch(HALL_JSON, {cache:"no-store"});
+  if(!res.ok) throw new Error("hall json error");
+  return await res.json();
+}
 
-/* ===============================
+/* ============================
    РЕНДЕР
-================================ */
-function renderHall(data){
-  const hall = document.getElementById("hall");
-  hall.innerHTML = "";
+============================ */
+function renderSection(title, rows, zone, price, css){
+  const wrap = document.createElement("div");
+  wrap.className = "section";
 
-  renderParter(data.parter);
-  renderAmphi(data.amphi);
-  renderBalcony(data.balcony);
-  renderLodges(data.lodges);
+  const h = document.createElement("div");
+  h.className = "section-title";
+  h.textContent = title;
+  wrap.appendChild(h);
 
-  updateSummary();
-}
-
-function renderParter(rows){
-  const sec = section("Партер");
   rows.forEach(r=>{
-    const row = rowLine(r.row);
+    const row = document.createElement("div");
+    row.className = "row";
+
+    const label = document.createElement("div");
+    label.className = "row-label";
+    label.textContent = r.row ?? "";
+    row.appendChild(label);
+
+    const seats = document.createElement("div");
+    seats.className = "seats";
+
     for(let i=1;i<=r.seats;i++){
-      row.seats.appendChild(seatBtn(`P${r.row}-${i}`, i, r.price));
-      if(i===10) row.seats.lastChild.classList.add("gap");
+      const b = document.createElement("button");
+      b.className = `seat ${css}`;
+      b.textContent = i;
+
+      const key = `${zone}-${r.row}-${i}`;
+
+      b.onclick = ()=>{
+        if(selected.has(key)){
+          selected.delete(key);
+          b.classList.remove("selected");
+        }else{
+          selected.set(key,{
+            zone, row:r.row, seat:i, price
+          });
+          b.classList.add("selected");
+        }
+        updateSummary();
+      };
+
+      seats.appendChild(b);
     }
-    sec.appendChild(row.el);
+
+    row.appendChild(seats);
+    wrap.appendChild(row);
   });
-  hall.appendChild(sec);
+
+  return wrap;
 }
 
-function renderAmphi(rows){
-  const sec = section("Амфітеатр");
-  rows.forEach(r=>{
-    const row = rowLine(r.row);
-    for(let i=1;i<=r.left;i++){
-      row.seats.appendChild(seatBtn(`A${r.row}-${i}`, i, r.price));
-    }
-    row.seats.appendChild(gap());
-    for(let i=1;i<=r.right;i++){
-      const num = i + r.left;
-      row.seats.appendChild(seatBtn(`A${r.row}-${num}`, num, r.price));
-    }
-    sec.appendChild(row.el);
-  });
-  hall.appendChild(sec);
-}
-
-function renderBalcony(rows){
-  const sec = section("Балкон");
-  rows.forEach(r=>{
-    const row = rowLine(r.row);
-    for(let i=1;i<=r.seats;i++){
-      row.seats.appendChild(seatBtn(`B${r.row}-${i}`, i, r.price));
-      if(i===14) row.seats.lastChild.classList.add("gap");
-    }
-    sec.appendChild(row.el);
-  });
-  hall.appendChild(sec);
-}
-
-function renderLodges(l){
-  const sec = section("Ложі");
-  ["A","B"].forEach(letter=>{
-    const row = rowLine(`Ложа ${letter}`);
-    for(let i=1;i<=l.count;i++){
-      row.seats.appendChild(
-        seatBtn(`L${letter}-${i}`, i, l.price)
-      );
-    }
-    sec.appendChild(row.el);
-  });
-  hall.appendChild(sec);
-}
-
-/* ===============================
-   UI ЕЛЕМЕНТИ
-================================ */
-function section(title){
-  const s = document.createElement("div");
-  s.className = "section";
-  s.innerHTML = `<h3>${title}</h3>`;
-  return s;
-}
-
-function rowLine(label){
-  const el = document.createElement("div");
-  el.className = "row";
-  const lab = document.createElement("div");
-  lab.className = "row-label";
-  lab.textContent = label;
-  const seats = document.createElement("div");
-  seats.className = "seats";
-  el.append(lab,seats);
-  return {el,seats};
-}
-
-function seatBtn(key,label,price){
-  const b = document.createElement("button");
-  b.className = "seat";
-  b.textContent = label;
-  b.onclick = ()=>{
-    if(b.classList.contains("selected")){
-      b.classList.remove("selected");
-      selected.delete(key);
-    }else{
-      b.classList.add("selected");
-      selected.set(key, price);
-    }
-    updateSummary();
-  };
-  return b;
-}
-
-function gap(){
-  const d = document.createElement("div");
-  d.style.width="26px";
-  return d;
-}
-
-/* ===============================
-   ПІДСУМОК
-================================ */
+/* ============================
+   СУММАРИЙ
+============================ */
 function updateSummary(){
-  const list = document.getElementById("selected");
-  const totalEl = document.getElementById("total");
+  const list = document.getElementById("chosen");
+  const total = document.getElementById("total");
   const btn = document.getElementById("goSale");
 
   if(selected.size===0){
-    list.textContent = "—";
-    totalEl.textContent = "0";
-    btn.disabled = true;
+    list.textContent="—";
+    total.textContent="0";
+    btn.disabled=true;
     return;
   }
 
+  const items = [];
   let sum = 0;
-  list.innerHTML = "";
-  selected.forEach((price,key)=>{
-    sum += price;
-    const d = document.createElement("div");
-    d.textContent = key;
-    list.appendChild(d);
+
+  selected.forEach(v=>{
+    items.push(`Ряд ${v.row}, місце ${v.seat} (${v.zone})`);
+    sum += v.price;
   });
 
-  totalEl.textContent = sum;
-  btn.disabled = false;
-
-  btn.onclick = ()=>{
-    const seats = [...selected.keys()].join(",");
-    location.href =
-      `../cashier/sale.html?show=${show}&seats=${seats}&amount=${sum}`;
-  };
+  list.textContent = items.join("; ");
+  total.textContent = sum;
+  btn.disabled=false;
 }
-</script>
 
+/* ============================
+   СТАРТ
+============================ */
+(async ()=>{
+  try{
+    const hall = await loadHall();
+    const root = document.getElementById("hall");
+
+    root.appendChild(
+      renderSection(
+        "Партер",
+        hall.parter.rows,
+        "Партер",
+        200,
+        "parter"
+      )
+    );
+
+    if(hall.amphi){
+      root.appendChild(
+        renderSection(
+          "Амфітеатр",
+          hall.amphi.rows,
+          "Амфітеатр",
+          120,
+          "amphi"
+        )
+      );
+    }
+
+    if(hall.balcony){
+      root.appendChild(
+        renderSection(
+          "Балкон",
+          hall.balcony.rows,
+          "Балкон",
+          100,
+          "balcony"
+        )
+      );
+    }
+
+    if(hall.lodges){
+      root.appendChild(
+        renderSection(
+          "Ложі",
+          hall.lodges.rows,
+          "Ложа",
+          10,
+          "lodge"
+        )
+      );
+    }
+
+  }catch(e){
+    document.getElementById("hall").innerHTML =
+      "❌ Не вдалося завантажити схему залу";
+    console.error(e);
+  }
+})();
+
+/* ============================
+   ПЕРЕХОД К ПРОДАЖЕ
+============================ */
+document.getElementById("goSale").onclick = ()=>{
+  const seats = [];
+  let sum = 0;
+
+  selected.forEach(v=>{
+    seats.push(`${v.zone} ${v.row}-${v.seat}`);
+    sum+=v.price;
+  });
+
+  const url = new URL("../cashier/sale.html", location.href);
+  url.searchParams.set("seats", seats.join(", "));
+  url.searchParams.set("amount", sum);
+
+  location.href = url.toString();
+};
+</script>
 </body>
 </html>

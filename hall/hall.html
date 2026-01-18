@@ -4,21 +4,63 @@
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1"/>
 <title>Схема залу (каса)</title>
-<link rel="stylesheet" href="../styles.css"/>
 
 <style>
-.hall-layout{display:flex;gap:24px}
+/* ====== БАЗА ====== */
+body{margin:0;font-family:system-ui,-apple-system,Segoe UI,sans-serif;background:#f3f4f6;color:#111}
+h1{margin:16px}
+
+/* ====== ЛЭЙАУТ ====== */
+.hall-layout{display:flex;gap:24px;align-items:flex-start;padding:16px}
 .hall-left{flex:1}
-.hall-sidebar{width:280px}
-.hall-scroll{background:#e5e7eb;padding:12px;border-radius:16px;overflow-x:auto}
-.seat{width:24px;height:24px;border-radius:6px;border:1px solid #d1d5db;
-display:flex;align-items:center;justify-content:center;font-size:11px;cursor:pointer}
-.seat--taken{background:#9ca3af;color:#fff;cursor:not-allowed}
-.seat--selected{background:#2563eb;color:#fff}
-.row{display:flex;gap:4px;margin-bottom:4px}
-.row-label{width:22px;text-align:right;font-size:11px;color:#6b7280}
-.section{margin-bottom:20px}
-.section-title{text-align:center;color:#6b7280;margin:6px 0}
+.hall-sidebar{width:300px}
+.card{background:#fff;border-radius:14px;padding:16px}
+
+/* ====== СКРОЛЛ ====== */
+.hall-scroll{background:#e5e7eb;border-radius:18px;padding:14px;overflow-x:auto}
+.hall-inner{width:1100px}
+
+/* ====== СЕКЦИИ ====== */
+.hall-section{margin-bottom:18px}
+.hall-section-title{text-align:center;font-size:14px;letter-spacing:.1em;color:#6b7280;margin:6px 0}
+
+/* ====== РЯДЫ ====== */
+.row-line{display:flex;align-items:center;gap:8px;margin-bottom:4px}
+.row-label{width:26px;text-align:right;font-size:11px;color:#6b7280}
+.seats-row{display:flex;gap:4px}
+
+/* ====== МЕСТА ====== */
+.seat{
+width:24px;height:24px;border-radius:6px;
+border:1px solid #cbd5e1;background:#fff;
+font-size:11px;cursor:pointer;
+display:flex;align-items:center;justify-content:center
+}
+.seat--front{background:#fef9c3}
+.seat--mid{background:#dbeafe}
+.seat--back{background:#e5e7eb}
+.seat--amphi{background:#e0f2fe}
+.seat--balcony{background:#f3e8ff}
+.seat--lodge{background:#fee2e2}
+
+.seat--selected{background:#2563eb!important;color:#fff;border-color:#2563eb}
+.seat--taken{background:#9ca3af!important;color:#fff;cursor:not-allowed}
+.seat--gap{margin-right:18px}
+.seat--empty{visibility:hidden;border:none}
+
+/* ====== ЛОЖИ ====== */
+.parter-wrap{display:flex;justify-content:center;gap:24px}
+.hall-lodge{display:flex;flex-direction:column;align-items:center}
+.hall-lodge-label{font-size:12px;color:#6b7280;margin-bottom:4px}
+.hall-lodge-seats{display:flex;flex-direction:column;gap:4px}
+
+/* ====== АМФИТЕАТР ====== */
+.amphi-gap{width:28px}
+
+/* ====== SIDEBAR ====== */
+.button{width:100%;padding:10px;border-radius:10px;border:none;background:#2563eb;color:#fff;font-size:16px}
+.button:disabled{background:#9ca3af}
+.meta{font-size:14px;color:#374151;margin:6px 0}
 </style>
 </head>
 
@@ -27,86 +69,148 @@ display:flex;align-items:center;justify-content:center;font-size:11px;cursor:poi
 
 <div class="hall-layout">
 <div class="hall-left">
-<div class="hall-scroll" id="hall"></div>
+<div class="hall-scroll">
+<div class="hall-inner">
+
+<!-- ====== ПАРТЕР + ЛОЖИ ====== -->
+<section class="hall-section">
+<div class="hall-section-title">ПАРТЕР</div>
+
+<div class="parter-wrap">
+
+<!-- ЛОЖА А -->
+<div class="hall-lodge">
+<div class="hall-lodge-label">Ложа А</div>
+<div class="hall-lodge-seats" id="lodgeA"></div>
 </div>
 
-<div class="hall-sidebar">
-<h3>Обрані місця</h3>
-<div id="summary">—</div>
-<div id="sum">Сума: 0 грн</div>
-<button id="sell" disabled>Перейти до продажу</button>
+<div id="parter"></div>
+
+<!-- ЛОЖА Б -->
+<div class="hall-lodge">
+<div class="hall-lodge-label">Ложа Б</div>
+<div class="hall-lodge-seats" id="lodgeB"></div>
 </div>
+
+</div>
+</section>
+
+<!-- ====== АМФИТЕАТР ====== -->
+<section class="hall-section">
+<div class="hall-section-title">АМФІТЕАТР</div>
+<div id="amphi"></div>
+</section>
+
+<!-- ====== БАЛКОН ====== -->
+<section class="hall-section">
+<div class="hall-section-title">БАЛКОН</div>
+<div id="balcony"></div>
+</section>
+
+</div>
+</div>
+</div>
+
+<!-- ====== SIDEBAR ====== -->
+<aside class="hall-sidebar">
+<div class="card">
+<h2>Обрані місця</h2>
+<p id="places" class="meta">—</p>
+<p id="amount" class="meta">Сума: 0 грн</p>
+<button id="sell" class="button" disabled>Перейти до продажу</button>
+</div>
+</aside>
 </div>
 
 <script type="module">
-import { getSoldSeats } from "../cashier/cashier.db.js";
+import { getSoldSeats, createSale } from "../cashier/cashier.db.js";
 
-const qs = new URLSearchParams(location.search);
-const show = qs.get("show");
+const qs=new URLSearchParams(location.search);
+const show=qs.get("show")||"default";
 
-const prices = {
-  parter: r => r<=6?200:r<=12?160:140,
-  amphi: ()=>120,
-  balcony: r=>r<=5?100:80,
-  lodge: ()=>10
-};
+const taken=new Set(await getSoldSeats(show));
+const selected=new Map();
 
-const selected = new Map();
-const taken = new Set(await getSoldSeats(show));
+function seatKey(z,r,s){return `${z}${r}-M${s}`}
 
-function seat(key, price){
-  const b=document.createElement("div");
-  b.className="seat";
-  b.textContent=key.split("-")[1];
-  if(taken.has(key)){b.classList.add("seat--taken");return b}
-  b.onclick=()=>{
-    if(selected.has(key)){selected.delete(key);b.classList.remove("seat--selected")}
-    else{selected.set(key,price);b.classList.add("seat--selected")}
-    update();
-  };
-  return b;
+function seat(btn,key,price){
+if(taken.has(key)){btn.classList.add("seat--taken");btn.disabled=true;return}
+btn.onclick=()=>{
+if(btn.classList.toggle("seat--selected")){
+selected.set(key,price)
+}else selected.delete(key)
+renderSummary()
+}
 }
 
-function row(label,seats,makeKey,priceFn){
-  const d=document.createElement("div");d.className="row";
-  const l=document.createElement("div");l.className="row-label";l.textContent=label;
-  d.appendChild(l);
-  for(let i=1;i<=seats;i++)d.appendChild(seat(makeKey(i),priceFn(label)));
-  return d;
+function renderSummary(){
+const p=[...selected.keys()];
+document.getElementById("places").textContent=p.join(", ")||"—";
+const sum=[...selected.values()].reduce((a,b)=>a+b,0);
+document.getElementById("amount").textContent="Сума: "+sum+" грн";
+document.getElementById("sell").disabled=!p.length;
 }
 
-const hall=document.getElementById("hall");
-
-// ПАРТЕР
-hall.append(title("ПАРТЕР"));
-for(let r=1;r<=18;r++)
-  hall.append(row(r,20,i=>`P${r}-M${i}`,prices.parter));
-
-// ЛОЖИ
-hall.append(title("ЛОЖІ"));
-for(let i=1;i<=18;i++){
-  const d=document.createElement("div");d.className="row";
-  d.append("A",seat(`A0-M${i}`,10)," ",seat(`B0-M${i}`,10));
-  hall.append(d);
+/* ====== ПАРТЕР ====== */
+const parter=document.getElementById("parter");
+for(let r=1;r<=18;r++){
+const line=document.createElement("div");line.className="row-line";
+const lab=document.createElement("div");lab.className="row-label";lab.textContent=r;
+const row=document.createElement("div");row.className="seats-row";
+for(let s=1;s<=20;s++){
+const b=document.createElement("button");b.className="seat "+
+(r<=6?"seat--front":r<=12?"seat--mid":"seat--back")+(s===10?" seat--gap":"");
+b.textContent=s;
+const key=seatKey("P",r,s);
+seat(b,key,r<=6?200:r<=12?160:140);
+row.appendChild(b)
+}
+line.append(lab,row);parter.appendChild(line)
 }
 
-// АМФІТЕАТР
-hall.append(title("АМФІТЕАТР"));
-for(let r=19;r<=23;r++)
-  hall.append(row(r,22,i=>`A${r}-M${i}`,prices.amphi));
+/* ====== ЛОЖИ ====== */
+["A","B"].forEach((L,i)=>{
+const box=document.getElementById(i?"lodgeB":"lodgeA");
+for(let s=1;s<=18;s++){
+const b=document.createElement("button");b.className="seat seat--lodge";b.textContent=s;
+const key=seatKey(L,0,s);seat(b,key,10);box.appendChild(b)
+}
+});
 
-// БАЛКОН
-hall.append(title("БАЛКОН"));
-for(let r=1;r<=6;r++)
-  hall.append(row(r,28,i=>`B${r}-M${i}`,prices.balcony));
+/* ====== АМФИТЕАТР ====== */
+const am=document.getElementById("amphi");
+[19,20,21,22,23].forEach(r=>{
+const line=document.createElement("div");line.className="row-line";
+const lab=document.createElement("div");lab.className="row-label";lab.textContent=r;
+const L=document.createElement("div");L.className="seats-row";
+const gap=document.createElement("div");gap.className="amphi-gap";
+const R=document.createElement("div");R.className="seats-row";
+for(let s=1;s<=11;s++){const b=document.createElement("button");b.className="seat seat--amphi";b.textContent=s;seat(b,seatKey("A",r,s),120);L.appendChild(b)}
+for(let s=12;s<=22;s++){const b=document.createElement("button");b.className="seat seat--amphi";b.textContent=s;seat(b,seatKey("A",r,s),120);R.appendChild(b)}
+line.append(lab,L,gap,R);am.appendChild(line)
+});
 
-function title(t){const d=document.createElement("div");d.className="section-title";d.textContent=t;return d}
+/* ====== БАЛКОН ====== */
+const bal=document.getElementById("balcony");
+for(let r=1;r<=6;r++){
+const line=document.createElement("div");line.className="row-line";
+const lab=document.createElement("div");lab.className="row-label";lab.textContent=r;
+const row=document.createElement("div");row.className="seats-row";
+for(let s=1;s<=28;s++){
+if(r===6 && s>10 && s<19){const e=document.createElement("div");e.className="seat seat--empty";row.appendChild(e);continue}
+const b=document.createElement("button");b.className="seat seat--balcony"+(s===14?" seat--gap":"");
+b.textContent=r===6&&s>=19?s-8:s;
+seat(b,seatKey("B",r,b.textContent),r<=5?100:80);row.appendChild(b)
+}
+line.append(lab,row);bal.appendChild(line)
+}
 
-function update(){
-  document.getElementById("summary").textContent=[...selected.keys()].join(", ")||"—";
-  const s=[...selected.values()].reduce((a,b)=>a+b,0);
-  document.getElementById("sum").textContent="Сума: "+s+" грн";
-  document.getElementById("sell").disabled=!selected.size;
+/* ====== ПРОДАЖА ====== */
+document.getElementById("sell").onclick=async()=>{
+for(const [k,p] of selected){
+await createSale({show_id:show,seat_label:k,price:p})
+}
+location.reload()
 }
 </script>
 </body>

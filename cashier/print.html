@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+  <meta charset="utf-8"/>
+  <title>Касовий квиток</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+
+  <!-- библиотека штрих-кода -->
+  <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.6/dist/JsBarcode.all.min.js"></script>
+  <!-- библиотека QR -->
+  <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.4/build/qrcode.min.js"></script>
+
+  <style>
+    @page { size: 80mm 200mm; margin: 5mm; }
+
+    body{
+      margin:0;
+      font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+      background:#fff;
+    }
+
+    .ticket{
+      width:260px;
+      padding:12px;
+    }
+
+    .center{text-align:center;}
+    .title{font-weight:900;font-size:14px;margin-bottom:6px;}
+    .sub{font-size:11px;color:#374151;margin-bottom:6px;}
+    .meta{font-size:11px;margin:4px 0;}
+    .strong{font-weight:800;}
+
+    .divider{
+      border-bottom:1px dashed #9ca3af;
+      margin:8px 0;
+    }
+
+    .barcode-wrap{
+      margin-top:10px;
+      text-align:center;
+    }
+
+    #barcode{
+      width:100%;
+      height:48px;
+    }
+
+    .barcode-text{
+      font-size:10px;
+      margin-top:4px;
+      word-break:break-all;
+    }
+
+    .qr{
+      margin-top:10px;
+      display:flex;
+      justify-content:center;
+    }
+
+    .footer{
+      font-size:9px;
+      color:#6b7280;
+      margin-top:8px;
+      text-align:center;
+    }
+
+    @media print{
+      body{margin:0;}
+    }
+  </style>
+</head>
+<body>
+
+<div class="ticket" id="ticket">
+  <div class="center title">Театр ім. Т. Г. Шевченка</div>
+  <div class="center sub">Касовий квиток</div>
+
+  <div class="divider"></div>
+
+  <div class="meta">Сеанс: <span id="show"></span></div>
+  <div class="meta">Місце: <span id="seat"></span></div>
+  <div class="meta">Ціна: <span id="price"></span> грн</div>
+  <div class="meta">Дата: <span id="date"></span></div>
+
+  <div class="divider"></div>
+
+  <div class="barcode-wrap">
+    <svg id="barcode"></svg>
+    <div class="barcode-text" id="codeText"></div>
+  </div>
+
+  <div class="qr">
+    <canvas id="qr"></canvas>
+  </div>
+
+  <div class="footer">
+    Зберігайте квиток до кінця вистави
+  </div>
+</div>
+
+<script type="module">
+import { db } from "./cashier.db.js";
+
+const qs = new URLSearchParams(location.search);
+const ticketId = qs.get("ticket");
+
+if(!ticketId){
+  alert("Немає ticketId");
+  throw new Error("ticketId required");
+}
+
+const ticket = await db.getTicket(ticketId);
+
+if(!ticket){
+  alert("Квиток не знайдено");
+  throw new Error("ticket not found");
+}
+
+document.getElementById("show").textContent = ticket.showId;
+document.getElementById("seat").textContent = ticket.seat;
+document.getElementById("price").textContent = ticket.price;
+document.getElementById("date").textContent =
+  new Date(ticket.soldAt).toLocaleString("uk-UA");
+
+// === КОД БИЛЕТА ===
+// универсальный, автономный
+const payload = `CASH|${ticket.id}|${ticket.showId}|${ticket.seat}`;
+
+// штрих-код
+JsBarcode("#barcode", payload, {
+  format: "CODE128",
+  displayValue: false,
+  height: 48,
+  margin: 0
+});
+
+document.getElementById("codeText").textContent = payload;
+
+// QR (дополнительно)
+QRCode.toCanvas(
+  document.getElementById("qr"),
+  payload,
+  { width: 110, margin: 1 }
+);
+
+// автопечать
+setTimeout(()=>window.print(), 300);
+</script>
+
+</body>
+</html>

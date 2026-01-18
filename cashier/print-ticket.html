@@ -1,0 +1,150 @@
+<!doctype html>
+<html lang="uk">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>Касовий квиток</title>
+
+  <!-- JsBarcode (локально можно положить позже; сейчас CDN допустим для печати) -->
+  <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.6/dist/JsBarcode.all.min.js"></script>
+
+  <style>
+    /* Термопринтер: 80мм */
+    @page { size: 80mm 200mm; margin: 5mm; }
+    body{
+      margin:0;
+      font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+      background:#fff;
+      color:#111827;
+    }
+    .ticket{
+      width:260px;
+      padding:8px 6px;
+      box-sizing:border-box;
+    }
+    .center{ text-align:center; }
+    .muted{ color:#6b7280; font-size:11px; }
+    .title{ font-weight:900; font-size:14px; margin:4px 0; text-transform:uppercase; }
+    .line{ border-top:1px dashed #d1d5db; margin:8px 0; }
+    .row{
+      display:flex; justify-content:space-between; align-items:flex-start;
+      font-size:12px; margin:4px 0;
+    }
+    .row b{ font-weight:800; }
+    .barcode-wrap{ margin:8px 0 2px; text-align:center; }
+    svg{ max-width:100%; }
+    .footer{ font-size:10px; color:#6b7280; line-height:1.25; }
+    @media print{
+      body{ background:#fff; }
+    }
+  </style>
+</head>
+<body>
+  <div class="ticket" id="ticket">
+    <div class="center">
+      <div class="title" id="theatre">Театр</div>
+      <div class="muted" id="tagline">Касовий квиток</div>
+    </div>
+
+    <div class="line"></div>
+
+    <div class="row"><span>Вистава</span><b id="showTitle">—</b></div>
+    <div class="row"><span>Дата / Час</span><b id="showDate">—</b></div>
+
+    <div class="line"></div>
+
+    <div class="row"><span>Місце</span><b id="seat">—</b></div>
+    <div class="row"><span>Ціна</span><b id="price">—</b></div>
+
+    <div class="line"></div>
+
+    <div class="row"><span>№ квитка</span><b id="ticketNo">—</b></div>
+    <div class="row"><span>Продано</span><b id="soldAt">—</b></div>
+
+    <div class="barcode-wrap">
+      <svg id="barcode"></svg>
+    </div>
+
+    <div class="center muted" id="barcodeText"></div>
+
+    <div class="line"></div>
+
+    <div class="footer">
+      Квиток дійсний на одну особу. Зберігайте квиток до кінця вистави.
+    </div>
+  </div>
+
+  <script>
+    /**
+     * ДАНІ ДЛЯ ДРУКУ
+     * Передаються через sessionStorage под ключем CASH_PRINT_PAYLOAD
+     *
+     * {
+     *   theatre: "Театр ім. Т. Г. Шевченка",
+     *   tagline: "Каса",
+     *   showTitle: "Вісім",
+     *   showDate: "15.01.2026 18:00",
+     *   seat: "Ложа А, місце 6",
+     *   price: "120 грн",
+     *   ticketNo: "CASH-20260115-184210-123",
+     *   soldAt: "15.01.2026 17:42"
+     * }
+     */
+
+    const KEY = "CASH_PRINT_PAYLOAD";
+
+    function $(id){ return document.getElementById(id); }
+
+    function fmt(d){
+      try{
+        const x = new Date(d);
+        if (isNaN(x)) return String(d);
+        const p = n => String(n).padStart(2,'0');
+        return `${p(x.getDate())}.${p(x.getMonth()+1)}.${x.getFullYear()} ${p(x.getHours())}:${p(x.getMinutes())}`;
+      }catch{ return String(d); }
+    }
+
+    (function init(){
+      let payload = null;
+      try{
+        payload = JSON.parse(sessionStorage.getItem(KEY) || "null");
+      }catch(e){ payload = null; }
+
+      if (!payload){
+        $("ticket").innerHTML = "<div class='muted'>Немає даних для друку</div>";
+        return;
+      }
+
+      $("theatre").textContent   = payload.theatre || "Театр";
+      $("tagline").textContent   = payload.tagline || "Каса";
+      $("showTitle").textContent = payload.showTitle || "—";
+      $("showDate").textContent  = payload.showDate || "—";
+      $("seat").textContent      = payload.seat || "—";
+      $("price").textContent     = payload.price || "—";
+      $("ticketNo").textContent  = payload.ticketNo || "—";
+      $("soldAt").textContent    = payload.soldAt ? fmt(payload.soldAt) : fmt(new Date());
+
+      const code = String(payload.ticketNo || "");
+
+      if (code){
+        try{
+          JsBarcode("#barcode", code, {
+            format: "CODE128",
+            lineColor: "#111827",
+            width: 1.6,
+            height: 46,
+            displayValue: false,
+            margin: 0
+          });
+          $("barcodeText").textContent = code;
+        }catch(e){
+          $("barcodeText").textContent = "Штрих-код недоступний";
+        }
+      }
+
+      // автопечать
+      setTimeout(()=>window.print(), 300);
+    })();
+  </script>
+</body>
+</html>

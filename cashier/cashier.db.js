@@ -1,6 +1,6 @@
-// cashier.db.js
+// cashier/cashier.db.js
 // Локальная БД кассы (IndexedDB)
-// Автономно. Без интернета. Без Supabase.
+// Автономно. Без интернета.
 
 const DB_NAME = "theatre_cashier_db";
 const DB_VERSION = 1;
@@ -19,24 +19,14 @@ export function openCashierDB() {
     req.onupgradeneeded = (e) => {
       const db = e.target.result;
 
-      // ---- спектакли ----
-      if (!db.objectStoreNames.contains("shows")) {
-        const store = db.createObjectStore("shows", { keyPath: "id" });
-        store.createIndex("by_date", "date");
-      }
-
-      // ---- продажи ----
       if (!db.objectStoreNames.contains("sales")) {
         const store = db.createObjectStore("sales", { keyPath: "id" });
         store.createIndex("by_show", "show_id");
-        store.createIndex("by_seat", "seat_label");
-        store.createIndex("by_time", "sold_at");
       }
 
-      // ---- занятые места (кеш) ----
       if (!db.objectStoreNames.contains("taken")) {
         const store = db.createObjectStore("taken", {
-          keyPath: "key" // show_id|seat_label
+          keyPath: "key" // show|seat
         });
         store.createIndex("by_show", "show_id");
       }
@@ -50,96 +40,20 @@ export function openCashierDB() {
 }
 
 /* =========================
-   SHOWS
-========================= */
-export async function saveShow(show) {
-  const db = await openCashierDB();
-  return txPut(db, "shows", {
-    ...show,
-    updated_at: new Date().toISOString(),
-  });
-}
-
-export async function getShows() {
-  const db = await openCashierDB();
-  return txGetAll(db, "shows");
-}
-
-export async function getShow(id) {
-  const db = await openCashierDB();
-  return txGet(db, "shows", id);
-}
-
-/* =========================
-   SALES
-========================= */
-export async function createSale({
-  show_id,
-  seat_label,
-  price,
-  cashier = "cashier",
-}) {
-  const db = await openCashierDB();
-
-  const sale = {
-    id: makeSaleId(),
-    show_id,
-    seat_label,
-    price,
-    cashier,
-    sold_at: new Date().toISOString(),
-    status: "sold",
-  };
-
-  await txPut(db, "sales", sale);
-
-  // помечаем место занятым
-  await txPut(db, "taken", {
-    key: `${show_id}|${seat_label}`,
-    show_id,
-    seat_label,
-    sold_at: sale.sold_at,
-  });
-
-  return sale;
-}
-
-export async function getSalesByShow(show_id) {
-  const db = await openCashierDB();
-  return txIndexGetAll(db, "sales", "by_show", show_id);
-}
-
-/* =========================
-   TAKEN SEATS
-========================= */
-export async function isSeatTaken(show_id, seat_label) {
-  const db = await openCashierDB();
-  const key = `${show_id}|${seat_label}`;
-  const res = await txGet(db, "taken", key);
-  return !!res;
-}
-
-export async function getTakenSeats(show_id) {
-  const db = await openCashierDB();
-  const rows = await txIndexGetAll(db, "taken", "by_show", show_id);
-  return rows.map(r => r.seat_label);
-}
-
-/* =========================
-   HELPERS
+   CORE
 ========================= */
 function makeSaleId() {
   const d = new Date();
-  const pad = (n) => String(n).padStart(2, "0");
+  const p = n => String(n).padStart(2, "0");
   return (
     "CASH-" +
     d.getFullYear() +
-    pad(d.getMonth() + 1) +
-    pad(d.getDate()) +
+    p(d.getMonth() + 1) +
+    p(d.getDate()) +
     "-" +
-    pad(d.getHours()) +
-    pad(d.getMinutes()) +
-    pad(d.getSeconds()) +
+    p(d.getHours()) +
+    p(d.getMinutes()) +
+    p(d.getSeconds()) +
     "-" +
     Math.floor(Math.random() * 1000)
   );
@@ -154,24 +68,6 @@ function txPut(db, store, value) {
   });
 }
 
-function txGet(db, store, key) {
-  return new Promise((resolve, reject) => {
-    const tx = db.transaction(store, "readonly");
-    const req = tx.objectStore(store).get(key);
-    req.onsuccess = () => resolve(req.result || null);
-    req.onerror = () => reject(req.error);
-  });
-}
-
-function txGetAll(db, store) {
-  return new Promise((resolve, reject) => {
-    const tx = db.transaction(store, "readonly");
-    const req = tx.objectStore(store).getAll();
-    req.onsuccess = () => resolve(req.result || []);
-    req.onerror = () => reject(req.error);
-  });
-}
-
 function txIndexGetAll(db, store, index, value) {
   return new Promise((resolve, reject) => {
     const tx = db.transaction(store, "readonly");
@@ -181,15 +77,36 @@ function txIndexGetAll(db, store, index, value) {
     req.onerror = () => reject(req.error);
   });
 }
+
 /* =========================
-   COMPATIBILITY API
-   для hall.html
+   PUBLIC API (КАССА)
 ========================= */
 
-/**
- * Совместимость с hall.html
- * Возвращает массив seat_label, проданных кассой
- */
+// ✅ ЭТО ОЖИДАЕТ hall.html
+export async function saveSale({ show_id, seat_label, price }) {
+  const db = await openCashierDB();
+
+  const sale = {
+    id: makeSaleId(),
+    show_id,
+    seat_label,
+    price,
+    sold_at: new Date().toISOString()
+  };
+
+  await txPut(db, "sales", sale);
+  await txPut(db, "taken", {
+    key: `${show_id}|${seat_label}`,
+    show_id,
+    seat_label
+  });
+
+  return sale;
+}
+
+// ✅ ЭТО ОЖИДАЕТ hall.html
 export async function getSoldSeats(show_id) {
-  return getTakenSeats(show_id);
+  const db = await openCashierDB();
+  const rows = await txIndexGetAll(db, "taken", "by_show", show_id);
+  return rows.map(r => r.seat_label);
 }

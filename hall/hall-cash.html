@@ -8,8 +8,7 @@
 <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.4/build/qrcode.min.js"></script>
 
 <style>
-body{font-family:Arial,sans-serif;margin:20px;background:#fff;color:#111}
-h1{margin-bottom:12px}
+body{font-family:Arial,sans-serif;margin:20px}
 .row{display:flex;align-items:center;margin-bottom:4px}
 .row-label{width:28px;text-align:right;margin-right:6px;color:#555;font-size:12px}
 .seat{
@@ -18,13 +17,12 @@ h1{margin-bottom:12px}
   margin:2px;font-size:11px;
   cursor:pointer;background:#fff
 }
-.seat.front{background:#fef9c3}
-.seat.mid{background:#dbeafe}
-.seat.back{background:#e5e7eb}
-.seat.amphi{background:#e0f2fe}
-.seat.balcony{background:#f3e8ff}
-.seat.lodge{background:#fee2e2}
-.seat.selected{background:#2563eb;color:#fff;border-color:#2563eb}
+.front{background:#fef9c3}
+.mid{background:#dbeafe}
+.back{background:#e5e7eb}
+.amphi{background:#e0f2fe}
+.balcony{background:#f3e8ff}
+.seat.selected{background:#2563eb;color:#fff}
 .seat.sold{background:#9ca3af;color:#fff;cursor:not-allowed}
 
 .section{margin-bottom:24px}
@@ -34,63 +32,30 @@ h1{margin-bottom:12px}
 button{padding:10px 14px;border-radius:10px;border:0;font-weight:bold;cursor:pointer}
 .sell{background:#86efac}
 .clear{background:#e5e7eb}
-
-.ticket{
-  width:300px;border:1px solid #ccc;
-  padding:12px;border-radius:12px;margin-bottom:12px
-}
-.ticket h2{margin:0 0 6px;font-size:16px}
-.ticket .meta{font-size:13px;margin-bottom:6px}
-.ticket img{display:block;margin:10px auto}
 </style>
 </head>
 
 <body>
 
 <h1>Схема залу — каса (offline)</h1>
-
 <div id="hall"></div>
 
 <div id="summary">
   <div id="chosen">Обрані місця: —</div>
-  <div id="total">Сума: 0 грн</div>
-  <br>
+  <div id="total">Сума: 0 грн</div><br>
   <button class="sell" id="sellBtn" disabled>ПРОДАТИ + ДРУК</button>
   <button class="clear" onclick="clearSelection()">ОЧИСТИТИ</button>
 </div>
 
 <script>
-/* ====== ДАННЫЕ ЗАЛА ШЕВЧЕНКО ====== */
 const hall = document.getElementById("hall");
 const selected = new Map();
-
-const prices = {
-  front:200, mid:160, back:140, amphi:120, balcony:100, lodge:10
-};
-
-function addSection(title, rows){
-  const s = document.createElement("div");
-  s.className="section";
-  s.innerHTML=`<div class="section-title">${title}</div>`;
-  rows.forEach(r=>{
-    const row = document.createElement("div");
-    row.className="row";
-    const label=document.createElement("div");
-    label.className="row-label";
-    label.textContent=r.row;
-    row.appendChild(label);
-    r.seats.forEach(seat=>{
-      row.appendChild(seat);
-    });
-    s.appendChild(row);
-  });
-  hall.appendChild(s);
-}
 
 function seatEl(key, cls, price){
   const b=document.createElement("button");
   b.className="seat "+cls;
   b.textContent=key.split("-")[1];
+  b.dataset.key = key;
   b.onclick=()=>{
     if(b.classList.contains("sold"))return;
     if(selected.has(key)){
@@ -105,37 +70,35 @@ function seatEl(key, cls, price){
   return b;
 }
 
+function addSection(title, rows){
+  const s=document.createElement("div");
+  s.className="section";
+  s.innerHTML=`<div class="section-title">${title}</div>`;
+  rows.forEach(r=>{
+    const row=document.createElement("div");
+    row.className="row";
+    const lab=document.createElement("div");
+    lab.className="row-label";
+    lab.textContent=r.row;
+    row.appendChild(lab);
+    r.seats.forEach(seat=>row.appendChild(seat));
+    s.appendChild(row);
+  });
+  hall.appendChild(s);
+}
+
 /* ПАРТЕР */
 const parter=[];
 for(let r=1;r<=18;r++){
   let cls=r<=6?"front":r<=12?"mid":"back";
   const seats=[];
   for(let m=1;m<=20;m++){
-    seats.push(seatEl(`P${r}-M${m}`,cls,prices[cls]));
+    seats.push(seatEl(`P${r}-M${m}`,cls,200));
   }
   parter.push({row:r,seats});
 }
 addSection("ПАРТЕР",parter);
 
-/* АМФИТЕАТР */
-const amphi=[];
-[19,20,21,22,23].forEach(r=>{
-  const seats=[];
-  for(let m=1;m<=11;m++) seats.push(seatEl(`A${r}-M${m}`,"amphi",prices.amphi));
-  amphi.push({row:r,seats});
-});
-addSection("АМФІТЕАТР",amphi);
-
-/* БАЛКОН */
-const balcony=[];
-for(let r=1;r<=6;r++){
-  const seats=[];
-  for(let m=1;m<=28;m++) seats.push(seatEl(`B${r}-M${m}`,"balcony",prices.balcony));
-  balcony.push({row:r,seats});
-}
-addSection("БАЛКОН",balcony);
-
-/* ====== КАССА ====== */
 function updateSummary(){
   const arr=[...selected.keys()];
   document.getElementById("chosen").textContent=
@@ -151,34 +114,17 @@ function clearSelection(){
   updateSummary();
 }
 
-document.getElementById("sellBtn").onclick=()=>{
-  const tickets=[];
-  selected.forEach((price,key)=>{
-    tickets.push({key,price});
-    document.querySelectorAll(".seat").forEach(b=>{
-      if(b.textContent===key.split("-")[1]) b.classList.add("sold");
-    });
-  });
-  printTickets(tickets);
-  clearSelection();
-};
-
-async function printTickets(tickets){
-  let html="";
-  for(const t of tickets){
-    const qr=await QRCode.toDataURL(`seat:${t.key}`);
-    html+=`
-    <div class="ticket">
-      <h2>Театр ім. Т. Г. Шевченка</h2>
-      <div class="meta">${t.key}</div>
-      <div class="meta">Ціна: ${t.price} грн</div>
-      <img src="${qr}">
-    </div>`;
+document.getElementById("sellBtn").onclick=async()=>{
+  for(const key of selected.keys()){
+    const btn=document.querySelector(`[data-key="${key}"]`);
+    if(btn){
+      btn.classList.remove("selected");
+      btn.classList.add("sold");
+    }
   }
-  const w=window.open("");
-  w.document.write(`<body>${html}</body>`);
-  w.print();
-}
+  selected.clear();
+  updateSummary();
+};
 </script>
 
 </body>

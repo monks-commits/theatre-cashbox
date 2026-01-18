@@ -55,6 +55,25 @@ header{padding:12px 16px;font-size:14px;background:#eef2f7}
 .log{margin-top:16px;font-size:13px}
 .log table{width:100%;border-collapse:collapse}
 .log td{padding:4px 0;border-bottom:1px solid #e5e7eb}
+
+.hall-scroll,
+.hall-inner,
+.hall-section,
+.row-line,
+.seats-row {
+  pointer-events: auto !important;
+}
+
+.seat {
+  pointer-events: auto !important;
+  cursor: pointer !important;
+  z-index: 2;
+}
+
+.seat--blocked,
+.seat--sold {
+  cursor: not-allowed !important;
+}  
 </style>
 </head>
 

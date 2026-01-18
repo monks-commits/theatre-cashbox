@@ -181,3 +181,15 @@ function txIndexGetAll(db, store, index, value) {
     req.onerror = () => reject(req.error);
   });
 }
+/* =========================
+   COMPATIBILITY API
+   для hall.html
+========================= */
+
+/**
+ * Совместимость с hall.html
+ * Возвращает массив seat_label, проданных кассой
+ */
+export async function getSoldSeats(show_id) {
+  return getTakenSeats(show_id);
+}

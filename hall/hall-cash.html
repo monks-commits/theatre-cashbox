@@ -1,276 +1,139 @@
 <!DOCTYPE html>
 <html lang="uk">
 <head>
-<meta charset="UTF-8">
-<title>Каса — схема залу</title>
-<meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Схема залу — каса (offline)</title>
 
-<style>
-body{margin:0;font-family:system-ui;background:#f4f5f7}
-header{padding:12px 16px;font-size:14px;background:#eef2f7}
-.wrap{display:flex;gap:20px;padding:16px}
-.hall{flex:1;background:#e5e7eb;border-radius:16px;padding:16px;overflow:auto}
-.side{width:340px;background:#fff;border-radius:16px;padding:16px}
+  <link rel="stylesheet" href="../styles.css" />
 
-.section{margin:18px 0;text-align:center;color:#6b7280;font-size:13px;letter-spacing:.08em}
-.parter-wrap{display:flex;justify-content:center;gap:24px}
+  <!-- QR -->
+  <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.4/build/qrcode.min.js"></script>
 
-.rows{display:flex;flex-direction:column;gap:4px}
-.row{display:flex;align-items:center;gap:6px}
-.row-label{width:22px;text-align:right;font-size:11px;color:#6b7280}
-.seats{display:flex;gap:4px}
-
-.lodge{display:flex;flex-direction:column;gap:4px}
-.lodge-title{font-size:12px;color:#6b7280;text-align:center;margin-bottom:4px}
-
-.seat{
-  width:26px;height:26px;border-radius:6px;
-  border:1px solid #9ca3af;
-  font-size:11px;
-  display:flex;align-items:center;justify-content:center;
-  cursor:pointer;user-select:none;
-  background:#fff;
-}
-.front{background:#fef9c3}
-.mid{background:#dbeafe}
-.back{background:#e5e7eb}
-.amphi{background:#e0f2fe}
-.balcony{background:#f3e8ff}
-.lodge-seat{background:#fee2e2}
-
-.sel{background:#2563eb!important;color:#fff}
-.taken{background:#9ca3af!important;color:#fff;cursor:not-allowed}
-
-.gap{margin-right:16px}
-.center-gap{width:26px}
-
-.btn{
-  width:100%;padding:12px;border-radius:10px;
-  border:0;font-size:15px;cursor:pointer
-}
-.sell{background:#2563eb;color:#fff}
-.sell:disabled{opacity:.4}
-.clear{margin-top:8px;background:#e5e7eb}
-
-.log{margin-top:16px;font-size:13px}
-.log table{width:100%;border-collapse:collapse}
-.log td{padding:4px 0;border-bottom:1px solid #e5e7eb}
-
-.hall-scroll,
-.hall-inner,
-.hall-section,
-.row-line,
-.seats-row {
-  pointer-events: auto !important;
-}
-
-.seat {
-  pointer-events: auto !important;
-  cursor: pointer !important;
-  z-index: 2;
-}
-
-.seat--blocked,
-.seat--sold {
-  cursor: not-allowed !important;
-}  
-</style>
+  <style>
+    .seat{
+      width:24px;height:24px;border-radius:6px;
+      border:1px solid #d1d5db;
+      background:#fff;
+      font-size:11px;
+      display:flex;align-items:center;justify-content:center;
+      cursor:pointer;
+      user-select:none;
+    }
+    .seat:hover{outline:2px solid #2563eb}
+    .seat--selected{background:#2563eb!important;color:#fff}
+    .seat--sold{background:#9ca3af!important;color:#fff;cursor:not-allowed}
+    .seat--blocked{background:#111827!important;color:#fff;cursor:not-allowed}
+    .row-line{display:flex;gap:8px;margin-bottom:4px}
+    .row-label{width:22px;text-align:right;font-size:11px;color:#6b7280}
+    .seats-row{display:flex;gap:4px}
+  </style>
 </head>
 
 <body>
+<main class="main">
+<div class="container">
+<h1>Схема залу — каса (offline)</h1>
 
-<header>
-  <b>Режим:</b> КАСА (OFFLINE)
-</header>
+<div id="parter"></div>
 
-<div class="wrap">
-  <div class="hall" id="hall"></div>
+<p id="summary">Обрані місця: немає</p>
+<p id="sum">Сума: 0 грн</p>
 
-  <div class="side">
-    <h3>Кошик (каса)</h3>
-    <div id="list">—</div>
-    <div id="sum">Сума: 0 грн</div><br>
-    <button id="sell" class="btn sell" disabled>ПРОДАТИ + ДРУК</button>
-    <button id="clear" class="btn clear">ОЧИСТИТИ</button>
-
-    <div class="log">
-      <h4>Журнал каси</h4>
-      <table id="log"></table>
-    </div>
-  </div>
+<button id="clear">Очистити</button>
 </div>
-// FORCE ACTIVATE SEATS (safety fix)
-setTimeout(() => {
-  document.querySelectorAll('.seat').forEach(b => {
-    b.style.pointerEvents = 'auto';
-    b.disabled = false;
-  });
-}, 0);
-<script>
-const qs=new URLSearchParams(location.search);
-const show=qs.get("show")||"default";
+</main>
 
-/* ===== IndexedDB ===== */
-const DB="cashbox_db",V=1;
-let db;
-function openDB(){
-  if(db) return Promise.resolve(db);
-  return new Promise(res=>{
-    const r=indexedDB.open(DB,V);
-    r.onupgradeneeded=e=>{
-      const d=e.target.result;
-      d.createObjectStore("taken",{keyPath:"key"});
-      d.createObjectStore("sales",{keyPath:"id"});
-    };
-    r.onsuccess=()=>res(db=r.result);
-  });
-}
-async function getTaken(){
-  const d=await openDB();
-  return new Promise(res=>{
-    const r=d.transaction("taken").objectStore("taken").getAll();
-    r.onsuccess=()=>res(
-      r.result.filter(x=>x.show===show).map(x=>x.seat)
-    );
-  });
-}
-async function saveSale(seat,price){
-  const d=await openDB();
-  const tx=d.transaction(["taken","sales"],"readwrite");
-  tx.objectStore("taken").put({key:show+"|"+seat,show,seat});
-  tx.objectStore("sales").put({
-    id:Date.now()+"-"+Math.random(),
-    show,seat,price,time:new Date().toLocaleTimeString()
-  });
-}
-async function getSales(){
-  const d=await openDB();
-  return new Promise(res=>{
-    const r=d.transaction("sales").objectStore("sales").getAll();
-    r.onsuccess=()=>res(r.result.filter(x=>x.show===show));
-  });
+<script type="module">
+/* ================================
+   OFFLINE CASH HALL — WORKING CORE
+   ================================ */
+
+const parter = document.getElementById("parter");
+const summary = document.getElementById("summary");
+const sumEl = document.getElementById("sum");
+const clearBtn = document.getElementById("clear");
+
+const selected = new Map();
+
+/* ----- SCHEMA ----- */
+const rows = Array.from({length:18}, (_,i)=>({
+  row:i+1,
+  seats:20,
+  price: i+1<=6 ? 200 : i+1<=12 ? 160 : 140
+}));
+
+/* ----- HELPERS ----- */
+function seatKey(r,s){ return `P${r}-M${s}` }
+
+function updateSummary(){
+  if(!selected.size){
+    summary.textContent = "Обрані місця: немає";
+    sumEl.textContent = "Сума: 0 грн";
+    return;
+  }
+  const keys=[...selected.keys()];
+  const total=[...selected.values()].reduce((a,b)=>a+b,0);
+  summary.textContent="Обрані місця: "+keys.join("; ");
+  sumEl.textContent="Сума: "+total+" грн";
 }
 
-/* ===== State ===== */
-const hall=document.getElementById("hall");
-const selected=new Map();
-let taken=new Set();
-
-function priceParter(r){return r<=6?200:r<=12?160:140}
-
-function update(){
-  const a=[...selected.keys()];
-  document.getElementById("list").textContent=a.length?a.join(", "):"—";
-  const s=[...selected.values()].reduce((x,y)=>x+y,0);
-  document.getElementById("sum").textContent="Сума: "+s+" грн";
-  document.getElementById("sell").disabled=!a.length;
-}
-
-function seat(id,label,price,cls){
-  const b=document.createElement("div");
-  b.className="seat "+cls;
-  b.textContent=label;
-  if(taken.has(id)){b.classList.add("taken");return b;}
-  b.onclick=()=>{
-    if(selected.has(id)){
-      selected.delete(id);b.classList.remove("sel");
-    }else{
-      selected.set(id,price);b.classList.add("sel");
-    }
-    update();
-  };
-  return b;
-}
-
-/* ===== Render ===== */
+/* ----- RENDER ----- */
 function render(){
-  hall.innerHTML="";
-  hall.innerHTML+=`<div class="section">ПАРТЕР</div>`;
-  const wrap=document.createElement("div");
-  wrap.className="parter-wrap";
+  parter.innerHTML="";
+  rows.forEach(r=>{
+    const line=document.createElement("div");
+    line.className="row-line";
 
-  const la=document.createElement("div");
-  la.className="lodge";la.innerHTML=`<div class="lodge-title">Ложа А</div>`;
-  const lb=document.createElement("div");
-  lb.className="lodge";lb.innerHTML=`<div class="lodge-title">Ложа Б</div>`;
-  for(let i=1;i<=18;i++){
-    la.append(seat(`A0-M${i}`,i,10,"lodge-seat"));
-    lb.append(seat(`B0-M${i}`,i,10,"lodge-seat"));
-  }
+    const lab=document.createElement("div");
+    lab.className="row-label";
+    lab.textContent=r.row;
+    line.appendChild(lab);
 
-  const rows=document.createElement("div");
-  rows.className="rows";
-  for(let r=1;r<=18;r++){
-    const row=document.createElement("div");
-    row.className="row";
-    row.innerHTML=`<div class="row-label">${r}</div>`;
-    const s=document.createElement("div");
-    s.className="seats";
-    for(let m=1;m<=20;m++){
-      const cls=(r<=6?"front":r<=12?"mid":"back")+(m===10?" gap":"");
-      s.append(seat(`P${r}-M${m}`,m,priceParter(r),cls));
+    const seats=document.createElement("div");
+    seats.className="seats-row";
+
+    for(let s=1;s<=r.seats;s++){
+      const btn=document.createElement("button");
+      btn.className="seat";
+      btn.textContent=s;
+      btn.dataset.key=seatKey(r.row,s);
+      btn.dataset.price=r.price;
+
+      btn.addEventListener("click",()=>{
+        if(btn.classList.contains("seat--sold")) return;
+
+        if(btn.classList.contains("seat--selected")){
+          btn.classList.remove("seat--selected");
+          selected.delete(btn.dataset.key);
+        }else{
+          btn.classList.add("seat--selected");
+          selected.set(btn.dataset.key, r.price);
+        }
+        updateSummary();
+      });
+
+      seats.appendChild(btn);
     }
-    row.append(s);rows.append(row);
-  }
-  wrap.append(la,rows,lb);
-  hall.append(wrap);
 
-  hall.innerHTML+=`<div class="section">АМФІТЕАТР</div>`;
-  for(let r=19;r<=23;r++){
-    const row=document.createElement("div");
-    row.className="row";
-    row.innerHTML=`<div class="row-label">${r}</div>`;
-    const s=document.createElement("div");
-    s.className="seats";
-    for(let m=1;m<=22;m++){
-      if(m===12){const g=document.createElement("div");g.className="center-gap";s.append(g);continue;}
-      s.append(seat(`A${r}-M${m}`,m,120,"amphi"));
-    }
-    row.append(s);hall.append(row);
-  }
-
-  hall.innerHTML+=`<div class="section">БАЛКОН</div>`;
-  for(let r=1;r<=6;r++){
-    const row=document.createElement("div");
-    row.className="row";
-    row.innerHTML=`<div class="row-label">${r}</div>`;
-    const s=document.createElement("div");
-    s.className="seats";
-    for(let m=1;m<=28;m++){
-      if(r===6 && m>10 && m<19){s.append(document.createElement("div"));continue;}
-      if(m===14){const g=document.createElement("div");g.className="center-gap";s.append(g);}
-      s.append(seat(`B${r}-M${m}`,m,r===6?80:100,"balcony"));
-    }
-    row.append(s);hall.append(row);
-  }
-}
-
-async function renderLog(){
-  const rows=await getSales();
-  const t=document.getElementById("log");
-  t.innerHTML="";
-  rows.slice(-10).reverse().forEach(r=>{
-    const tr=document.createElement("tr");
-    tr.innerHTML=`<td>${r.time}</td><td>${r.seat}</td><td>${r.price} грн</td>`;
-    t.append(tr);
+    line.appendChild(seats);
+    parter.appendChild(line);
   });
 }
 
-/* ===== Init ===== */
-(async()=>{
-  taken=new Set(await getTaken());
-  render();
-  renderLog();
-})();
+/* ----- CLEAR ----- */
+clearBtn.onclick=()=>{
+  document.querySelectorAll(".seat--selected")
+    .forEach(b=>b.classList.remove("seat--selected"));
+  selected.clear();
+  updateSummary();
+};
 
-document.getElementById("sell").onclick=async()=>{
-  for(const [k,p] of selected) await saveSale(k,p);
-  alert("Продаж виконано");
-  location.reload();
-};
-document.getElementById("clear").onclick=()=>{
-  selected.clear();update();
-};
+/* ----- BOOT ----- */
+render();
+updateSummary();
+
+console.log("✅ OFFLINE CASH HALL LOADED");
 </script>
 </body>
 </html>

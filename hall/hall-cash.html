@@ -99,7 +99,13 @@ header{padding:12px 16px;font-size:14px;background:#eef2f7}
     </div>
   </div>
 </div>
-
+// FORCE ACTIVATE SEATS (safety fix)
+setTimeout(() => {
+  document.querySelectorAll('.seat').forEach(b => {
+    b.style.pointerEvents = 'auto';
+    b.disabled = false;
+  });
+}, 0);
 <script>
 const qs=new URLSearchParams(location.search);
 const show=qs.get("show")||"default";

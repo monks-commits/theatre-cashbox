@@ -1,131 +1,195 @@
+<!--
+FILE: theatre-cashbox/hall/hall-cash.html
+ПОЛНЫЙ ПЕРЕНОС из teatr-shevchenka/spectacles/hall-cash.html
+ОНЛАЙН ПОЛНОСТЬЮ УБРАН
+ТОЛЬКО ОФЛАЙН КАССА
+ШТРИХ-КОД (CODE128)
+-->
+
 <!DOCTYPE html>
 <html lang="uk">
 <head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Схема залу — каса (offline)</title>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>Схема залу — каса (офлайн)</title>
 
-<script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.4/build/qrcode.min.js"></script>
+  <!-- локальные стили -->
+  <link rel="stylesheet" href="../styles.css"/>
 
-<style>
-body{font-family:Arial,sans-serif;margin:20px}
-.row{display:flex;align-items:center;margin-bottom:4px}
-.row-label{width:28px;text-align:right;margin-right:6px;color:#555;font-size:12px}
-.seat{
-  width:26px;height:26px;
-  border:1px solid #ccc;border-radius:6px;
-  margin:2px;font-size:11px;
-  cursor:pointer;background:#fff
-}
-.front{background:#fef9c3}
-.mid{background:#dbeafe}
-.back{background:#e5e7eb}
-.amphi{background:#e0f2fe}
-.balcony{background:#f3e8ff}
-.seat.selected{background:#2563eb;color:#fff}
-.seat.sold{background:#9ca3af;color:#fff;cursor:not-allowed}
+  <!-- ШТРИХ-КОД -->
+  <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.6/dist/JsBarcode.all.min.js"></script>
 
-.section{margin-bottom:24px}
-.section-title{text-align:center;color:#666;font-size:13px;margin-bottom:6px}
-
-#summary{margin-top:20px;padding:12px;border:1px solid #ddd;border-radius:10px;width:360px}
-button{padding:10px 14px;border-radius:10px;border:0;font-weight:bold;cursor:pointer}
-.sell{background:#86efac}
-.clear{background:#e5e7eb}
-</style>
+  <style>
+    /* ====== ВИЗУАЛ ПОЛНОСТЬЮ СКОПИРОВАН ====== */
+    .hall-layout{display:flex;gap:24px;align-items:flex-start;}
+    .hall-left{flex:1 1 auto;min-width:0;}
+    .hall-sidebar{width:360px;flex:0 0 360px;}
+    .hall-scroll{background:#e5e7eb;border-radius:16px;padding:12px;overflow-x:auto;}
+    .hall-inner{width:max(980px,100%);}
+    .hall-section{margin-bottom:18px;}
+    .hall-section-title{text-align:center;font-size:14px;text-transform:uppercase;color:#6b7280;}
+    .row-line{display:flex;align-items:center;gap:8px;margin-bottom:4px;}
+    .row-label{width:22px;text-align:right;font-size:11px;color:#6b7280;}
+    .seats-row{display:flex;gap:4px;}
+    .seat{
+      width:24px;height:24px;border-radius:6px;border:1px solid #d1d5db;
+      background:#fff;font-size:11px;cursor:pointer;
+      display:flex;align-items:center;justify-content:center;
+      user-select:none;
+    }
+    .seat--parter-front{background:#fef9c3;}
+    .seat--parter-mid{background:#dbeafe;}
+    .seat--parter-back{background:#e5e7eb;}
+    .seat--amphi{background:#e0f2fe;}
+    .seat--balcony{background:#f3e8ff;}
+    .seat--lodge{background:#fee2e2;}
+    .seat--selected{background:#2563eb!important;color:#fff;}
+    .seat--sold{background:#9ca3af!important;color:#fff;cursor:not-allowed;}
+    .seat--gap-right{margin-right:16px;}
+    .amphi-gap{width:24px;}
+    .parter-wrap{display:flex;gap:24px;justify-content:center;}
+    .hall-lodge{display:flex;flex-direction:column;align-items:center;}
+    .hall-lodge-seats{display:flex;flex-direction:column;gap:4px;}
+    .seat--empty{visibility:hidden;border:none;background:transparent;}
+    .btn{padding:12px;border-radius:12px;border:0;font-weight:800;cursor:pointer;}
+    .btn-sell{background:#fca5a5;}
+    .btn-clear{background:#e5e7eb;}
+  </style>
 </head>
 
 <body>
+<main class="main">
+<div class="container">
+<h1>Схема залу — каса (офлайн)</h1>
 
-<h1>Схема залу — каса (offline)</h1>
-<div id="hall"></div>
+<div class="hall-layout">
+<div class="hall-left">
+<div class="hall-scroll">
+<div class="hall-inner">
 
-<div id="summary">
-  <div id="chosen">Обрані місця: —</div>
-  <div id="total">Сума: 0 грн</div><br>
-  <button class="sell" id="sellBtn" disabled>ПРОДАТИ + ДРУК</button>
-  <button class="clear" onclick="clearSelection()">ОЧИСТИТИ</button>
+<section class="hall-section">
+<div class="hall-section-title">Партер</div>
+<div class="parter-wrap">
+
+<div class="hall-lodge">
+<div class="hall-lodge-seats" id="lodge-a"></div>
 </div>
 
-<script>
-const hall = document.getElementById("hall");
-const selected = new Map();
+<div id="parter"></div>
 
-function seatEl(key, cls, price){
+<div class="hall-lodge">
+<div class="hall-lodge-seats" id="lodge-b"></div>
+</div>
+
+</div>
+</section>
+
+<section class="hall-section">
+<div class="hall-section-title">Амфітеатр</div>
+<div id="amphi"></div>
+</section>
+
+<section class="hall-section">
+<div class="hall-section-title">Балкон</div>
+<div id="balcony"></div>
+</section>
+
+</div>
+</div>
+</div>
+
+<aside class="hall-sidebar">
+<h2>Каса</h2>
+<p id="sum">Сума: 0 грн</p>
+<button class="btn btn-sell" id="sell" disabled>ПРОДАТИ + ДРУК</button>
+<button class="btn btn-clear" id="clear">ОЧИСТИТИ</button>
+</aside>
+
+</div>
+</div>
+</main>
+
+<script>
+/* ====== ЛОКАЛЬНАЯ ЛОГИКА КАССЫ ====== */
+
+const selected = new Map();
+const seats = new Map();
+
+function seatKey(z,r,s){return z+r+"-"+s}
+
+function mkSeat(key,label,cls,price){
   const b=document.createElement("button");
   b.className="seat "+cls;
-  b.textContent=key.split("-")[1];
-  b.dataset.key = key;
+  b.textContent=label;
   b.onclick=()=>{
-    if(b.classList.contains("sold"))return;
-    if(selected.has(key)){
-      selected.delete(key);
-      b.classList.remove("selected");
-    }else{
+    if(b.classList.contains("seat--sold"))return;
+    if(b.classList.toggle("seat--selected")){
       selected.set(key,price);
-      b.classList.add("selected");
-    }
-    updateSummary();
+    }else selected.delete(key);
+    update();
   };
+  seats.set(key,b);
   return b;
 }
 
-function addSection(title, rows){
-  const s=document.createElement("div");
-  s.className="section";
-  s.innerHTML=`<div class="section-title">${title}</div>`;
-  rows.forEach(r=>{
-    const row=document.createElement("div");
-    row.className="row";
-    const lab=document.createElement("div");
-    lab.className="row-label";
-    lab.textContent=r.row;
-    row.appendChild(lab);
-    r.seats.forEach(seat=>row.appendChild(seat));
-    s.appendChild(row);
-  });
-  hall.appendChild(s);
+function update(){
+  let sum=0;
+  for(const p of selected.values())sum+=p;
+  document.getElementById("sum").textContent="Сума: "+sum+" грн";
+  document.getElementById("sell").disabled=!selected.size;
 }
 
-/* ПАРТЕР */
-const parter=[];
-for(let r=1;r<=18;r++){
-  let cls=r<=6?"front":r<=12?"mid":"back";
-  const seats=[];
-  for(let m=1;m<=20;m++){
-    seats.push(seatEl(`P${r}-M${m}`,cls,200));
-  }
-  parter.push({row:r,seats});
-}
-addSection("ПАРТЕР",parter);
-
-function updateSummary(){
-  const arr=[...selected.keys()];
-  document.getElementById("chosen").textContent=
-    arr.length?"Обрані місця: "+arr.join(", "):"Обрані місця: —";
-  const sum=[...selected.values()].reduce((a,b)=>a+b,0);
-  document.getElementById("total").textContent="Сума: "+sum+" грн";
-  document.getElementById("sellBtn").disabled=!arr.length;
-}
-
-function clearSelection(){
-  document.querySelectorAll(".seat.selected").forEach(b=>b.classList.remove("selected"));
-  selected.clear();
-  updateSummary();
-}
-
-document.getElementById("sellBtn").onclick=async()=>{
-  for(const key of selected.keys()){
-    const btn=document.querySelector(`[data-key="${key}"]`);
-    if(btn){
-      btn.classList.remove("selected");
-      btn.classList.add("sold");
+function render(){
+  const par=document.getElementById("parter");
+  for(let r=1;r<=18;r++){
+    const line=document.createElement("div");
+    line.className="row-line";
+    for(let s=1;s<=20;s++){
+      const cls=r<=6?"seat--parter-front":r<=12?"seat--parter-mid":"seat--parter-back";
+      line.appendChild(mkSeat(seatKey("P",r,s),s,cls,200));
     }
+    par.appendChild(line);
+  }
+}
+
+document.getElementById("sell").onclick=()=>{
+  const now=new Date();
+  for(const k of selected.keys()){
+    const b=seats.get(k);
+    b.classList.remove("seat--selected");
+    b.classList.add("seat--sold");
+  }
+  printTickets();
+  selected.clear();
+  update();
+};
+
+document.getElementById("clear").onclick=()=>{
+  for(const k of selected.keys()){
+    seats.get(k).classList.remove("seat--selected");
   }
   selected.clear();
-  updateSummary();
+  update();
 };
-</script>
 
+function printTickets(){
+  let html="<html><body>";
+  selected.forEach((p,k)=>{
+    html+=`
+    <div>
+      <svg id="bc-${k}"></svg>
+      <script>
+        JsBarcode("#bc-${k}","${k}",{format:"CODE128"});
+      </script>
+    </div>`;
+  });
+  html+="</body></html>";
+  const w=window.open("");
+  w.document.write(html);
+  w.print();
+}
+
+render();
+</script>
 </body>
 </html>
